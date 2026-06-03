@@ -1,0 +1,48 @@
+---
+"$schema": https://schema-storage.s3-website.tinkoff.ru/unic/schema-v1.json
+spec:
+  apps:
+    summarizer:
+      prod:
+        name: time-summarizer
+        namespace: time-summarizer
+        type: prod
+        environment: yandex-prod
+        clusters:
+        - ya-b-prod1
+        services:
+        - name: app
+          resources:
+            replicas: 2
+          deployStrategy:
+            rollingUpdateMode: maxUnavailable
+          ports:
+            external: 443
+            internal: 8000
+          probes:
+            liveness:
+              path: /healthz
+              port: 9000
+              timeout: 10
+            readiness:
+              path: /healthz
+              port: 9000
+              timeout: 10
+            startup:
+              path: /healthz
+              port: 9000
+              failureThreshold: 30
+              periodSeconds: 15
+          envs:
+            APP_ENV: "prod"
+            TIME_BOT_TOKEN: "$[ENV:TIME_BOT_TOKEN]"
+            GPT_TOKEN: "$[ENV:GPT_TOKEN]"
+            SAGE_ENV: "prod"
+            SAGE_SYSTEM: "summarizer"
+            SAGE_GROUP: "bot_workflow"
+            SAGE_SERVER: "ya-b"
+            LE_HC_MODE: passthrough
+            LE_HC_URL: http://localhost:8000/healthz
+          extensions:
+          - kind: serviceAccount
+            automount: true

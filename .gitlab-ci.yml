@@ -1,0 +1,68 @@
+stages:
+  - build
+  - delivery
+  - deploy
+
+variables:
+  DOCKER_ARTIFACTORY_REGISTRY: "docker-hosted.artifactory.tcsbank.ru"
+  IMAGE_NAME: "${DOCKER_ARTIFACTORY_REGISTRY}/${CI_PROJECT_ROOT_NAMESPACE}/${CI_PROJECT_NAME}:latest"
+  DOCKER_BUILDER_IMG: "${DOCKER_ARTIFACTORY_REGISTRY}/cicd-images/base-kaniko:latest"
+  COLOR_MAGENTA: \033[35;1m
+  COLOR_NONE: \033[0;m
+
+image:
+  name: $DOCKER_BUILDER_IMG
+  entrypoint: [""]
+
+.before:
+  before_script:
+    - dp auth service-acc --key-file "${SVC_ACC_KEY_FILE}"
+    - dp auth configure-kaniko --config-path /kaniko/.docker/config.json
+
+.build:
+  image: $DOCKER_BUILDER_IMG
+  stage: build
+  extends:
+    - .before
+  script:
+    - echo -e "${COLOR_MAGENTA}Building temporary image:${IMAGE_NAME}${COLOR_NONE}"
+    - /kaniko/executor
+      --dockerfile "${CI_PROJECT_DIR}/Dockerfile"
+      --context $CI_PROJECT_DIR
+      --destination $IMAGE_NAME
+      --no-push
+    - echo -e "${COLOR_MAGENTA}Created temporary image:${IMAGE_NAME}${COLOR_NONE}"
+
+build:
+  stage: build
+  extends:
+    - .build
+  only:
+    - merge_requests
+
+delivery-docker:
+  image: $DOCKER_BUILDER_IMG
+  stage: delivery
+  extends:
+    - .before
+  script:
+    - echo -e "${COLOR_MAGENTA}Deploying image:${IMAGE_NAME}${COLOR_NONE}"
+    - /kaniko/executor
+      --dockerfile "${CI_PROJECT_DIR}/Dockerfile"
+      --context $CI_PROJECT_DIR
+      --destination $IMAGE_NAME
+    - echo -e "${COLOR_MAGENTA}Deployed image:${IMAGE_NAME}${COLOR_NONE}"
+  only:
+    - master
+  when: on_success
+
+unic-deploy:
+  image: docker-hosted.artifactory.tcsbank.ru/unic/unic-main-container-1:latest
+  stage: deploy
+  extends:
+    - .before
+  script:
+    - unic deploy --stand=prod
+  only:
+    - master
+  when: on_success
